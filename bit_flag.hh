@@ -89,17 +89,17 @@ public:
     constexpr underlying_type to_underlying() const noexcept { return rep; }
 
     constexpr bit_flag& set(bit_flag other) noexcept { rep |= other.rep; return *this; }
-    constexpr bit_flag& set() noexcept { rep = all_set.rep; return *this; }
+    constexpr bit_flag& set() noexcept { return set(all_set); }
     constexpr bit_flag& reset(bit_flag other) noexcept { rep &= ~other.rep; return *this; }
-    constexpr bit_flag& reset() noexcept { rep = zero; return *this; }
+    constexpr bit_flag& reset() noexcept { return reset(all_set); }
     constexpr bit_flag& flip(bit_flag other) noexcept { rep ^= other.rep; return *this; }
-    constexpr bit_flag& flip() noexcept { rep ^= all_set.rep; return *this; }
+    constexpr bit_flag& flip() noexcept { return flip(all_set); }
     constexpr bool all_of(bit_flag other) const noexcept { return (rep & other.rep) == other.rep; }
     constexpr bool any_of(bit_flag other) const noexcept { return (rep & other.rep) != zero; }
     constexpr bool none_of(bit_flag other) const noexcept { return (rep & other.rep) == zero; }
-    constexpr bool all() const noexcept { return rep == all_set.rep; }
-    constexpr bool any() const noexcept { return rep != zero; }
-    constexpr bool none() const noexcept { return rep == zero; }
+    constexpr bool all() const noexcept { return all_of(all_set); }
+    constexpr bool any() const noexcept { return any_of(all_set); }
+    constexpr bool none() const noexcept { return none_of(all_set); }
     constexpr bool test(enum_type e) const noexcept { return any_of(e); }
     constexpr std::size_t count() const noexcept { return std::popcount(rep); }
 
