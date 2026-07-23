@@ -12,13 +12,14 @@
 #include <algorithm>
 #include <functional>
 #include <bit>
+#include <optional>
 
 namespace mylib {
 
 namespace details {
 
 template<typename Enum>
-consteval std::size_t max_enumerator_value() {
+inline constexpr std::size_t max_enumerator_value = [] consteval {
     auto enumerators = enumerators_of(^^Enum);
     if (enumerators.empty()) {
         throw std::meta::exception("no enumerators", ^^Enum);
@@ -32,11 +33,11 @@ consteval std::size_t max_enumerator_value() {
         }
     }
     return max;
-}
+}();
 
 template<typename Enum>
 using default_representation_type = [:[] consteval {
-    static constexpr std::size_t max = max_enumerator_value<Enum>();
+    static constexpr std::size_t max = max_enumerator_value<Enum>;
     if (max < 8) return ^^decltype(std::uint8_t{});
     if (max < 16) return ^^decltype(std::uint16_t{});
     if (max < 32) return ^^decltype(std::uint32_t{});
@@ -46,14 +47,14 @@ using default_representation_type = [:[] consteval {
 
 } // namespace mylib::details
 
-// Enum values are used as indices of the bit flag.
-// Enum values not presented in definition are ignored.
+// Enum values are used as indices of the bit flag
 template<typename Enum, typename RepType = details::default_representation_type<Enum>>
 class bit_flag
 {
     static_assert(std::is_enum_v<Enum>);
+    static_assert(std::is_same_v<std::remove_cvref_t<RepType>, RepType>);
     static_assert(std::is_integral_v<RepType> && std::is_unsigned_v<RepType> && !std::is_same_v<RepType, bool>);
-    static_assert(std::size_t(std::numeric_limits<RepType>::digits) > details::max_enumerator_value<Enum>());
+    static_assert(std::size_t(std::numeric_limits<RepType>::digits) > details::max_enumerator_value<Enum>);
 
 public:
     using enum_type = Enum;
@@ -69,16 +70,17 @@ private:
         }
         return rt;
     }();
-    static constexpr bit_flag all_set_flag = from_representation(all_set);
 
-    static constexpr bool filter_unchecked_enum(enum_type e) noexcept {
+    static consteval bit_flag all_set_flag() noexcept { return from_representation(all_set); }
+
+    static constexpr bool is_in_range_enum(enum_type e) noexcept {
         auto val = std::to_underlying(e);
         if constexpr (std::is_signed_v<decltype(val)>) {
             if (val < 0) {
                 return false;
             }
         }
-        return val <= details::max_enumerator_value<enum_type>();
+        return val <= details::max_enumerator_value<enum_type>;
     }
 
 public:
@@ -86,8 +88,9 @@ public:
     constexpr bit_flag(const bit_flag&) = default;
     constexpr bit_flag& operator=(const bit_flag&) = default;
 
-    constexpr bit_flag(enum_type e) noexcept
-        : bit_flag(from_representation(filter_unchecked_enum(e) ? one << std::to_underlying(e) : zero))
+    // Implicit conversion from enum value, unknown values are ignored
+    constexpr /* implicit */ bit_flag(enum_type e) noexcept
+        : bit_flag(from_representation(is_in_range_enum(e) ? one << std::to_underlying(e) : zero))
     {}
 
     constexpr bit_flag(std::initializer_list<enum_type> il) noexcept : bit_flag(std::from_range, il) {}
@@ -100,26 +103,42 @@ public:
         }
     }
 
+    constexpr void swap(bit_flag& other) noexcept { std::ranges::swap(rep, other.rep); }
+    friend constexpr void swap(bit_flag& lhs, bit_flag& rhs) noexcept { lhs.swap(rhs); }
+
+    // Default: ignore unknown bits
     [[nodiscard]] static constexpr bit_flag from_representation(representation_type rep) noexcept {
         bit_flag b;
         b.rep = rep & all_set;
         return b;
     }
 
+    // Unchecked
+    [[nodiscard]] static constexpr bit_flag from_representation_unchecked(representation_type rep) {
+        contract_assert((rep & ~all_set) == zero);
+        return std::bit_cast<bit_flag>(rep);
+    }
+
+    // Checked
+    [[nodiscard]] static constexpr std::optional<bit_flag> try_from_representation(representation_type rep) noexcept {
+        return (rep & ~all_set) == zero ? from_representation(rep) : std::nullopt;
+    }
+
     [[nodiscard]] constexpr representation_type to_representation() const noexcept { return rep; }
 
     constexpr bit_flag& set(bit_flag other) noexcept { rep |= other.rep; return *this; }
-    constexpr bit_flag& set() noexcept { return set(all_set_flag); }
+    constexpr bit_flag& set() noexcept { return set(all_set_flag()); }
     constexpr bit_flag& reset(bit_flag other) noexcept { rep &= ~other.rep; return *this; }
-    constexpr bit_flag& reset() noexcept { return reset(all_set_flag); }
+    constexpr bit_flag& reset() noexcept { return reset(all_set_flag()); }
     constexpr bit_flag& flip(bit_flag other) noexcept { rep ^= other.rep; return *this; }
-    constexpr bit_flag& flip() noexcept { return flip(all_set_flag); }
+    constexpr bit_flag& flip() noexcept { return flip(all_set_flag()); }
+
     [[nodiscard]] constexpr bool all_of(bit_flag other) const noexcept { return (rep & other.rep) == other.rep; }
     [[nodiscard]] constexpr bool any_of(bit_flag other) const noexcept { return (rep & other.rep) != zero; }
     [[nodiscard]] constexpr bool none_of(bit_flag other) const noexcept { return (rep & other.rep) == zero; }
-    [[nodiscard]] constexpr bool all() const noexcept { return all_of(all_set_flag); }
-    [[nodiscard]] constexpr bool any() const noexcept { return any_of(all_set_flag); }
-    [[nodiscard]] constexpr bool none() const noexcept { return none_of(all_set_flag); }
+    [[nodiscard]] constexpr bool all() const noexcept { return all_of(all_set_flag()); }
+    [[nodiscard]] constexpr bool any() const noexcept { return any_of(all_set_flag()); }
+    [[nodiscard]] constexpr bool none() const noexcept { return none_of(all_set_flag()); }
     [[nodiscard]] constexpr bool test(enum_type e) const noexcept { return any_of(e); }
     [[nodiscard]] constexpr std::size_t count() const noexcept { return std::popcount(rep); }
 
