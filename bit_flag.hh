@@ -181,7 +181,7 @@ public:
 
         [[nodiscard]] constexpr operator bool() const noexcept { return parent->any_of(mask); }
         [[nodiscard]] constexpr bool operator~() const noexcept { return parent->none_of(mask); }
-        const reference& flip() const noexcept { parent->flip(mask); return *this; }
+        constexpr const reference& flip() const noexcept { parent->flip(mask); return *this; }
 
         friend constexpr void swap(reference lhs, reference rhs) noexcept {
             bool tmp = static_cast<bool>(lhs);
@@ -209,7 +209,7 @@ public:
         bit_flag mask;
     };
 
-    reference operator[](enum_type e) noexcept { return reference(this, e); }
+    [[nodiscard]] constexpr reference operator[](enum_type e) noexcept { return reference(this, e); }
     [[nodiscard]] constexpr bool operator[](enum_type e) const noexcept { return test(e); }
 
 private:
@@ -228,6 +228,7 @@ concept is_bit_flag_reference = [] consteval {
     static constexpr auto parent = [] consteval {
         if (!has_parent(ref_info)) return std::meta::info{};
         auto parent = parent_of(ref_info);
+        if (!is_class_type(parent)) return std::meta::info{};
         if (!(has_template_arguments(parent) && template_of(parent) == ^^mylib::bit_flag)) return std::meta::info{};
         return parent;
     }();
