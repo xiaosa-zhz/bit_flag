@@ -22,17 +22,17 @@ template<typename Enum>
 inline constexpr std::size_t max_enumerator_value = [] consteval {
     auto enumerators = enumerators_of(^^Enum);
     if (enumerators.empty()) {
-        throw std::meta::exception("no enumerators", ^^Enum);
+        return 0uz;
     }
-    auto [min, max] = std::ranges::minmax(enumerators
-        | std::views::transform([](auto i) { return std::to_underlying(extract<Enum>(i)); })
+    auto [min, max] = std::ranges::minmax(
+        enumerators | std::views::transform([](auto i) { return std::to_underlying(extract<Enum>(i)); })
     );
     if constexpr (std::is_signed_v<std::underlying_type_t<Enum>>) {
         if (min < 0) {
             throw std::meta::exception("negative", ^^Enum);
         }
     }
-    return max;
+    return std::size_t(max);
 }();
 
 template<typename Enum>
@@ -73,14 +73,13 @@ private:
 
     static consteval bit_flag all_set_flag() noexcept { return from_representation(all_set); }
 
-    static constexpr bool is_in_range_enum(enum_type e) noexcept {
+    static constexpr bool is_valid_enum(enum_type e) noexcept {
         auto val = std::to_underlying(e);
         if constexpr (std::is_signed_v<decltype(val)>) {
-            if (val < 0) {
-                return false;
-            }
+            if (val < 0) return false;
         }
-        return val <= details::max_enumerator_value<enum_type>;
+        if (val > details::max_enumerator_value<enum_type>) return false;
+        return ((one << val) & all_set) != zero;
     }
 
 public:
@@ -90,7 +89,7 @@ public:
 
     // Implicit conversion from enum value, unknown values are ignored
     constexpr /* implicit */ bit_flag(enum_type e) noexcept
-        : bit_flag(from_representation(is_in_range_enum(e) ? one << std::to_underlying(e) : zero))
+        : bit_flag(from_representation(is_valid_enum(e) ? one << std::to_underlying(e) : zero))
     {}
 
     constexpr bit_flag(std::initializer_list<enum_type> il) noexcept : bit_flag(std::from_range, il) {}
@@ -114,14 +113,27 @@ public:
     }
 
     // Unchecked
-    [[nodiscard]] static constexpr bit_flag from_representation_unchecked(representation_type rep) {
-        contract_assert((rep & ~all_set) == zero);
+    [[nodiscard]] static constexpr bit_flag from_representation_unchecked(representation_type rep)
+        pre ((rep & ~all_set) == zero)
+    {
         return std::bit_cast<bit_flag>(rep);
+    }
+
+    // Unchecked
+    [[nodiscard]] static constexpr bit_flag from_enum_unchecked(enum_type e)
+        pre (is_valid_enum(e))
+    {
+        return from_representation_unchecked(one << std::to_underlying(e));
     }
 
     // Checked
     [[nodiscard]] static constexpr std::optional<bit_flag> try_from_representation(representation_type rep) noexcept {
-        return (rep & ~all_set) == zero ? from_representation(rep) : std::nullopt;
+        return (rep & ~all_set) == zero ? from_representation_unchecked(rep) : std::nullopt;
+    }
+
+    // Checked
+    [[nodiscard]] static constexpr std::optional<bit_flag> try_from_enum(enum_type e) noexcept {
+        return is_valid_enum(e) ? from_enum_unchecked(e) : std::nullopt;
     }
 
     [[nodiscard]] constexpr representation_type to_representation() const noexcept { return rep; }
