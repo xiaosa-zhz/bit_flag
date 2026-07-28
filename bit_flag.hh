@@ -165,6 +165,53 @@ public:
 
     [[nodiscard]] friend constexpr bool operator==(bit_flag lhs, bit_flag rhs) = default;
 
+    class reference
+    {
+    public:
+        constexpr reference(const reference&) = default;
+
+        constexpr const reference& operator=(reference other) const noexcept {
+            return *this = static_cast<bool>(other);
+        }
+
+        constexpr const reference& operator=(bool value) const noexcept {
+            parent->set(mask, value);
+            return *this;
+        }
+
+        [[nodiscard]] constexpr operator bool() const noexcept { return parent->any_of(mask); }
+        [[nodiscard]] constexpr bool operator~() const noexcept { return parent->none_of(mask); }
+        const reference& flip() const noexcept { parent->flip(mask); return *this; }
+
+        friend constexpr void swap(reference lhs, reference rhs) noexcept {
+            bool tmp = static_cast<bool>(lhs);
+            lhs = static_cast<bool>(rhs);
+            rhs = tmp;
+        }
+
+        friend constexpr void swap(reference lhs, bool& rhs) noexcept {
+            bool tmp = static_cast<bool>(lhs);
+            lhs = static_cast<bool>(rhs);
+            rhs = tmp;
+        }
+
+        friend constexpr void swap(bool& lhs, reference rhs) noexcept {
+            bool tmp = static_cast<bool>(lhs);
+            lhs = static_cast<bool>(rhs);
+            rhs = tmp;
+        }
+
+    private:
+        friend class bit_flag;
+        explicit constexpr reference(bit_flag* parent, enum_type e) noexcept : parent(parent), mask(e) {}
+
+        bit_flag* parent;
+        bit_flag mask;
+    };
+
+    reference operator[](enum_type e) noexcept { return reference(this, e); }
+    [[nodiscard]] constexpr bool operator[](enum_type e) const noexcept { return test(e); }
+
 private:
     representation_type rep = zero;
 };
@@ -173,11 +220,38 @@ template<std::ranges::input_range R>
     requires std::is_enum_v<std::ranges::range_value_t<R>>
 bit_flag(std::from_range_t, R&& r) -> bit_flag<std::ranges::range_value_t<R>>;
 
+namespace details {
+
+template<typename T>
+concept is_bit_flag_reference = [] consteval {
+    static constexpr auto ref_info = ^^T;
+    static constexpr auto parent = [] consteval {
+        if (!has_parent(ref_info)) return std::meta::info{};
+        auto parent = parent_of(ref_info);
+        if (!(has_template_arguments(parent) && template_of(parent) == ^^mylib::bit_flag)) return std::meta::info{};
+        return parent;
+    }();
+    if constexpr (parent == std::meta::info{}) {
+        return false;
+    } else {
+        return is_same_type(^^typename [:parent:]::reference, ref_info);
+    }
+}();
+
+} // namespace mylib::details
+
 } // namespace mylib
 
 template<typename Enum, typename RepType>
 struct std::hash<mylib::bit_flag<Enum, RepType>> {
     constexpr std::size_t operator()(mylib::bit_flag<Enum, RepType> b) const noexcept {
         return std::hash<RepType>{}(b.to_representation());
+    }
+};
+
+template<mylib::details::is_bit_flag_reference BitFlagRef>
+struct std::hash<BitFlagRef> {
+    constexpr std::size_t operator()(BitFlagRef ref) const noexcept {
+        return std::hash<bool>{}(static_cast<bool>(ref));
     }
 };
