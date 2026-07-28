@@ -138,7 +138,7 @@ public:
 
     [[nodiscard]] constexpr representation_type to_representation() const noexcept { return rep; }
 
-    constexpr bit_flag& set(bit_flag other) noexcept { rep |= other.rep; return *this; }
+    constexpr bit_flag& set(bit_flag other, bool value = true) noexcept { return value ? (rep |= other.rep, *this) : reset(other); }
     constexpr bit_flag& set() noexcept { return set(all_set_flag()); }
     constexpr bit_flag& reset(bit_flag other) noexcept { rep &= ~other.rep; return *this; }
     constexpr bit_flag& reset() noexcept { return reset(all_set_flag()); }
