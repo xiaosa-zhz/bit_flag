@@ -74,11 +74,8 @@ private:
     static consteval bit_flag all_set_flag() noexcept { return from_representation(all_set); }
 
     static constexpr bool is_valid_enum(enum_type e) noexcept {
-        auto val = std::to_underlying(e);
-        if constexpr (std::is_signed_v<decltype(val)>) {
-            if (val < 0) return false;
-        }
-        if (val > details::max_enumerator_value<enum_type>) return false;
+        const auto val = std::to_underlying(e);
+        if (val < 0 || val > details::max_enumerator_value<enum_type>) return false;
         return ((one << val) & all_set) != zero;
     }
 
@@ -128,12 +125,12 @@ public:
 
     // Checked
     [[nodiscard]] static constexpr std::optional<bit_flag> try_from_representation(representation_type rep) noexcept {
-        return (rep & ~all_set) == zero ? from_representation_unchecked(rep) : std::nullopt;
+        return (rep & ~all_set) == zero ? std::make_optional(from_representation_unchecked(rep)) : std::nullopt;
     }
 
     // Checked
     [[nodiscard]] static constexpr std::optional<bit_flag> try_from_enum(enum_type e) noexcept {
-        return is_valid_enum(e) ? from_enum_unchecked(e) : std::nullopt;
+        return is_valid_enum(e) ? std::make_optional(from_enum_unchecked(e)) : std::nullopt;
     }
 
     [[nodiscard]] constexpr representation_type to_representation() const noexcept { return rep; }
@@ -145,9 +142,9 @@ public:
     constexpr bit_flag& flip(bit_flag other) noexcept { rep ^= other.rep; return *this; }
     constexpr bit_flag& flip() noexcept { return flip(all_set_flag()); }
 
-    [[nodiscard]] constexpr bool all_of(bit_flag other) const noexcept { return (rep & other.rep) == other.rep; }
-    [[nodiscard]] constexpr bool any_of(bit_flag other) const noexcept { return (rep & other.rep) != zero; }
-    [[nodiscard]] constexpr bool none_of(bit_flag other) const noexcept { return (rep & other.rep) == zero; }
+    [[nodiscard]] constexpr bool all_of(this bit_flag self, bit_flag other) noexcept { return (self.rep & other.rep) == other.rep; }
+    [[nodiscard]] constexpr bool any_of(this bit_flag self, bit_flag other) noexcept { return (self.rep & other.rep) != zero; }
+    [[nodiscard]] constexpr bool none_of(this bit_flag self, bit_flag other) noexcept { return (self.rep & other.rep) == zero; }
     [[nodiscard]] constexpr bool all() const noexcept { return all_of(all_set_flag()); }
     [[nodiscard]] constexpr bool any() const noexcept { return any_of(all_set_flag()); }
     [[nodiscard]] constexpr bool none() const noexcept { return none_of(all_set_flag()); }
