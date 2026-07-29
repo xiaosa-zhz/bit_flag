@@ -161,7 +161,7 @@ public:
     [[nodiscard]] friend constexpr bit_flag operator^(bit_flag lhs, bit_flag rhs) noexcept { return lhs ^= rhs; }
     [[nodiscard]] friend constexpr bit_flag operator~(bit_flag f) noexcept { return f.flip(); }
 
-    [[nodiscard]] friend constexpr bool operator==(bit_flag lhs, bit_flag rhs) = default;
+    [[nodiscard]] friend constexpr bool operator==(bit_flag, bit_flag) = default;
 
     class reference
     {
