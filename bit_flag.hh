@@ -71,12 +71,13 @@ private:
         return rt;
     }();
 
-    static consteval bit_flag all_set_flag() noexcept { return from_representation(all_set); }
+    static consteval bit_flag all_set_flag() noexcept { return from_representation_unchecked(all_set); }
 
     static constexpr bool is_valid_enum(enum_type e) noexcept {
         const auto val = std::to_underlying(e);
-        if (val < 0 || val > details::max_enumerator_value<enum_type>) return false;
-        return ((one << val) & all_set) != zero;
+        return val >= 0
+            && val <= details::max_enumerator_value<enum_type>
+            && ((one << val) & all_set) != zero;
     }
 
 public:
@@ -86,7 +87,7 @@ public:
 
     // Implicit conversion from enum value, unknown values are ignored
     constexpr /* implicit */ bit_flag(enum_type e) noexcept
-        : bit_flag(from_representation(is_valid_enum(e) ? one << std::to_underlying(e) : zero))
+        : bit_flag(from_representation_unchecked(is_valid_enum(e) ? one << std::to_underlying(e) : zero))
     {}
 
     constexpr bit_flag(std::initializer_list<enum_type> il) noexcept : bit_flag(std::from_range, il) {}
@@ -178,25 +179,9 @@ public:
 
         [[nodiscard]] constexpr operator bool() const noexcept { return parent->any_of(mask); }
         [[nodiscard]] constexpr bool operator~() const noexcept { return parent->none_of(mask); }
+        constexpr const reference& set(bool value = true) const noexcept { return *this = value; }
+        constexpr const reference& reset() const noexcept { return *this = false; }
         constexpr const reference& flip() const noexcept { parent->flip(mask); return *this; }
-
-        friend constexpr void swap(reference lhs, reference rhs) noexcept {
-            bool tmp = static_cast<bool>(lhs);
-            lhs = static_cast<bool>(rhs);
-            rhs = tmp;
-        }
-
-        friend constexpr void swap(reference lhs, bool& rhs) noexcept {
-            bool tmp = static_cast<bool>(lhs);
-            lhs = static_cast<bool>(rhs);
-            rhs = tmp;
-        }
-
-        friend constexpr void swap(bool& lhs, reference rhs) noexcept {
-            bool tmp = static_cast<bool>(lhs);
-            lhs = static_cast<bool>(rhs);
-            rhs = tmp;
-        }
 
     private:
         friend class bit_flag;
